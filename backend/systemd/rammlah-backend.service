@@ -1,0 +1,16 @@
+[Unit]
+Description=Rammlah Raspberry Pi AI Backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pi/RammlahEnd/backend
+EnvironmentFile=/home/pi/RammlahEnd/backend/.env
+ExecStart=/home/pi/RammlahEnd/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
+User=pi
+
+[Install]
+WantedBy=multi-user.target

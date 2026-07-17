@@ -1,0 +1,19 @@
+fastapi>=0.116.0
+uvicorn[standard]>=0.35.0
+openai>=1.98.0
+pydantic>=2.11.0
+pydantic-settings>=2.10.0
+python-dotenv>=1.1.0
+python-multipart>=0.0.20
+Pillow>=11.2.0
+scikit-fuzzy>=0.5.0
+numpy>=2.2.0
+scipy>=1.14.0
+networkx>=3.4.0
+httpx>=0.28.0
+pyserial>=3.5
+pytest>=8.4.0
+pytest-asyncio>=1.1.0
+
+# Install Picamera2 on Raspberry Pi OS with apt:
+# sudo apt install -y python3-picamera2
