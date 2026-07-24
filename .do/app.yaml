@@ -1,5 +1,3 @@
-# DigitalOcean App Platform example.
-# Replace secret values before using with doctl.
 name: rammlah
 region: fra
 ingress:
@@ -39,7 +37,7 @@ services:
       http_path: /health
     envs:
       - key: OPENAI_API_KEY
-        value: your-openai-api-key
+        value: replace-with-your-openai-api-key
         type: SECRET
         scope: RUN_TIME
       - key: OPENAI_MODEL
@@ -57,10 +55,6 @@ services:
       - key: ROBOT_ENABLED
         value: "false"
         scope: RUN_TIME
-      - key: ALLOWED_ORIGINS
-        value: https://your-app-url
-        scope: RUN_TIME
-
 static_sites:
   - name: rammlah-dashboard
     environment_slug: node-js

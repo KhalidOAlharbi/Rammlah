@@ -2,11 +2,7 @@ import type { InspectionResult, StatusResponse } from "./types";
 
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
-if (!configuredApiBaseUrl) {
-  throw new Error("VITE_API_BASE_URL is required. Create dashboard/.env from dashboard/.env.example.");
-}
-
-export const API_BASE_URL = configuredApiBaseUrl.replace(/\/$/, "");
+export const API_BASE_URL = configuredApiBaseUrl ? configuredApiBaseUrl.replace(/\/$/, "") : "";
 
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
