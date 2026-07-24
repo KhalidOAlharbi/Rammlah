@@ -137,6 +137,7 @@ async def test_clean_image_does_not_run_fuzzy_logic(tmp_path, image_bytes):
 
     result = await service.analyze_and_decide(image_bytes, ImageSource.dashboard_upload)
 
+    assert result.prediction == "Clean"
     assert result.cleaning_required is False
     assert result.fuzzy_logic_used is False
     assert fuzzy.calls == 0

@@ -17,12 +17,13 @@ Classify the panel as exactly Clean, Dust, or Crack.
 Crack means visible glass damage, fractures, spider-web damage, circular impact damage, or broken photovoltaic cells.
 Dust means visible sand, dust, dirt, or particles on the panel surface.
 Clean means no meaningful visible dust and no visible crack.
+Minor specks, glare, reflections, shadows, scratches, grid lines, room dust around the panel, or dust below 25 percent coverage should be classified as Clean.
 Crack has higher priority than Dust.
 If both dust and a crack are present, return Crack.
 Do not return any additional classes.
 Do not include markdown in the result.
 If prediction is Clean or Crack, dust_coverage_percent should normally be 0.
-If prediction is Dust, estimate the visible dust-coverage percentage from 0 to 100.
+If prediction is Dust, estimate the visible dust-coverage percentage from 25 to 100.
 Keep reason short and suitable for display on a dashboard.
 """.strip()
 

@@ -193,11 +193,12 @@ class InspectionService:
     async def _apply_dust_decision(self, result: InspectionResult, analysis: VisionAnalysis) -> None:
         dust = analysis.dust_coverage_percent
         if dust < 25:
+            result.prediction = "Clean"
             result.cleaning_required = False
             result.robot_action = "No Action"
             result.robot_status = "Idle"
             result.fuzzy_logic_used = False
-            result.reason = "Dust coverage is below 25 percent. Treating panel as not dusty."
+            result.reason = "Dust coverage is below 25 percent. Panel is treated as clean."
             return
 
         if 25 <= dust < 30:
