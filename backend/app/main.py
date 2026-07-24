@@ -94,3 +94,8 @@ app.include_router(robot.router)
 @app.get("/")
 async def root() -> dict[str, str]:
     return {"name": "Rammlah Raspberry Pi AI Backend", "status": "Online"}
+
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    return {"status": "ok"}

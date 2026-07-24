@@ -1,0 +1,82 @@
+# DigitalOcean App Platform example.
+# Replace <github-user>/<repo> and https://your-app-url before using with doctl.
+name: rammlah
+region: fra
+ingress:
+  rules:
+    - component:
+        name: rammlah-backend
+      match:
+        path:
+          prefix: /api
+    - component:
+        name: rammlah-backend
+      match:
+        path:
+          prefix: /images
+    - component:
+        name: rammlah-backend
+      match:
+        path:
+          prefix: /health
+    - component:
+        name: rammlah-dashboard
+      match:
+        path:
+          prefix: /
+services:
+  - name: rammlah-backend
+    environment_slug: python
+    github:
+      repo: <github-user>/<repo>
+      branch: main
+      deploy_on_push: true
+    source_dir: backend
+    build_command: pip install -r requirements.txt
+    run_command: uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}
+    http_port: 8080
+    health_check:
+      http_path: /health
+    envs:
+      - key: OPENAI_API_KEY
+        value: your-openai-api-key
+        type: SECRET
+        scope: RUN_TIME
+      - key: OPENAI_MODEL
+        value: gpt-5.6-luna
+        scope: RUN_TIME
+      - key: LATITUDE
+        value: "24.7136"
+        scope: RUN_TIME
+      - key: LONGITUDE
+        value: "46.6753"
+        scope: RUN_TIME
+      - key: CAMERA_ENABLED
+        value: "false"
+        scope: RUN_TIME
+      - key: ROBOT_ENABLED
+        value: "false"
+        scope: RUN_TIME
+      - key: ALLOWED_ORIGINS
+        value: https://your-app-url
+        scope: RUN_TIME
+
+static_sites:
+  - name: rammlah-dashboard
+    environment_slug: node-js
+    github:
+      repo: <github-user>/<repo>
+      branch: main
+      deploy_on_push: true
+    source_dir: dashboard
+    build_command: npm ci && npm run build
+    output_dir: dist
+    index_document: index.html
+    catchall_document: index.html
+    envs:
+      - key: VITE_API_BASE_URL
+        value: https://your-app-url
+        scope: BUILD_TIME
+
+alerts:
+  - rule: DEPLOYMENT_FAILED
