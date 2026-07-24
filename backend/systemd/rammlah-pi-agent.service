@@ -1,0 +1,16 @@
+[Unit]
+Description=Rammlah Raspberry Pi Cloud Upload Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pi/Rammlah/backend
+EnvironmentFile=/home/pi/Rammlah/backend/.env.pi-agent
+ExecStart=/home/pi/Rammlah/backend/.venv/bin/python pi_agent.py
+Restart=on-failure
+RestartSec=10
+User=pi
+
+[Install]
+WantedBy=multi-user.target

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, File, Request, UploadFile
+from secrets import compare_digest
+
+from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile, status
 
 from ..schemas import ImageSource, InspectionResult
 
@@ -7,10 +9,28 @@ router = APIRouter(prefix="/api", tags=["inspection"])
 ALLOWED_UPLOAD_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
+def _validate_upload_type(image: UploadFile) -> bool:
+    content_type = (image.content_type or "").lower()
+    return not content_type or content_type in ALLOWED_UPLOAD_TYPES
+
+
+def _require_pi_agent_token(request: Request, token: str | None) -> None:
+    expected = request.app.state.settings.raspberry_pi_agent_token_value
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="RASPBERRY_PI_AGENT_TOKEN is not configured on the backend.",
+        )
+    if not token or not compare_digest(token, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Raspberry Pi agent token.",
+        )
+
+
 @router.post("/predict/upload", response_model=InspectionResult)
 async def predict_upload(request: Request, image: UploadFile = File(...)) -> InspectionResult:
-    content_type = (image.content_type or "").lower()
-    if content_type and content_type not in ALLOWED_UPLOAD_TYPES:
+    if not _validate_upload_type(image):
         return await request.app.state.inspection_service.analyze_and_decide(
             b"",
             ImageSource.dashboard_upload,
@@ -19,6 +39,25 @@ async def predict_upload(request: Request, image: UploadFile = File(...)) -> Ins
     return await request.app.state.inspection_service.analyze_and_decide(
         image_bytes,
         ImageSource.dashboard_upload,
+    )
+
+
+@router.post("/predict/pi-upload", response_model=InspectionResult)
+async def predict_pi_upload(
+    request: Request,
+    image: UploadFile = File(...),
+    x_rammlah_agent_token: str | None = Header(default=None),
+) -> InspectionResult:
+    _require_pi_agent_token(request, x_rammlah_agent_token)
+    if not _validate_upload_type(image):
+        return await request.app.state.inspection_service.analyze_and_decide(
+            b"",
+            ImageSource.raspberry_pi_camera,
+        )
+    image_bytes = await image.read()
+    return await request.app.state.inspection_service.analyze_and_decide(
+        image_bytes,
+        ImageSource.raspberry_pi_camera,
     )
 
 

@@ -1,5 +1,6 @@
 .env
 backend/.env
+backend/.env.pi-agent
 dashboard/.env
 __pycache__/
 *.py[cod]

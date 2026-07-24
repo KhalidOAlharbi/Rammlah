@@ -54,6 +54,50 @@ sudo systemctl enable rammlah-backend
 sudo systemctl start rammlah-backend
 ```
 
+## Raspberry Pi to DigitalOcean Upload Agent
+
+Use this when the dashboard and AI backend are deployed on DigitalOcean, and the Raspberry Pi only needs to capture images and upload them to the cloud app.
+
+1. In DigitalOcean App Platform, add a backend environment variable named `RASPBERRY_PI_AGENT_TOKEN`.
+2. Set it to a long random value. Use the same value on the Raspberry Pi as `RAMMLAH_AGENT_TOKEN`.
+3. Redeploy the DigitalOcean app.
+4. Copy this repository to the Raspberry Pi.
+5. Install dependencies:
+
+```bash
+cd backend
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.txt
+sudo apt install -y python3-picamera2
+```
+
+6. Create `backend/.env.pi-agent` from `backend/.env.pi-agent.example`:
+
+```bash
+RAMMLAH_API_BASE_URL=https://rammlah-app-d57uq.ondigitalocean.app
+RAMMLAH_AGENT_TOKEN=the_same_token_from_digitalocean
+RAMMLAH_SCAN_INTERVAL_SECONDS=300
+LOG_LEVEL=INFO
+```
+
+7. Test one foreground run:
+
+```bash
+python pi_agent.py
+```
+
+8. To start the uploader on boot, copy `systemd/rammlah-pi-agent.service` to `/etc/systemd/system/`, edit the `WorkingDirectory`, `EnvironmentFile`, and `ExecStart` paths if your project folder is different, then run:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable rammlah-pi-agent
+sudo systemctl start rammlah-pi-agent
+sudo systemctl status rammlah-pi-agent
+```
+
+The cloud dashboard will update when the Pi uploads to `POST /api/predict/pi-upload`.
+
 ## Safety Notes
 
 Laptop upload mode always uses `execution_mode="Test"` and never sends serial movement commands. Crack detections stop the robot and block cleaning. Weather, OpenAI, camera, fuzzy, or robot failures block cleaning and keep the FastAPI server running whenever possible.

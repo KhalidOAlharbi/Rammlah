@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     openai_model: str = Field(default="gpt-5.6-luna", alias="OPENAI_MODEL")
     openai_timeout_seconds: float = Field(default=45.0, alias="OPENAI_TIMEOUT_SECONDS")
     max_image_dimension: int = Field(default=1280, alias="MAX_IMAGE_DIMENSION")
+    raspberry_pi_agent_token: Optional[SecretStr] = Field(default=None, alias="RASPBERRY_PI_AGENT_TOKEN")
 
     latitude: Optional[float] = Field(default=None, alias="LATITUDE")
     longitude: Optional[float] = Field(default=None, alias="LONGITUDE")
@@ -63,6 +64,12 @@ class Settings(BaseSettings):
         if self.openai_api_key is None:
             return ""
         return self.openai_api_key.get_secret_value()
+
+    @property
+    def raspberry_pi_agent_token_value(self) -> str:
+        if self.raspberry_pi_agent_token is None:
+            return ""
+        return self.raspberry_pi_agent_token.get_secret_value()
 
     @property
     def robot_commands(self) -> dict[str, str]:
