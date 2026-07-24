@@ -85,6 +85,7 @@ app.add_middleware(
 
 settings.images_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/images", StaticFiles(directory=settings.images_dir), name="images")
+app.mount("/captures", StaticFiles(directory=settings.captures_dir), name="captures")
 
 for api_prefix in ("/api", ""):
     app.include_router(inspection.router, prefix=api_prefix)
