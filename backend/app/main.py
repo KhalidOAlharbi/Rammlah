@@ -86,9 +86,10 @@ app.add_middleware(
 settings.images_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/images", StaticFiles(directory=settings.images_dir), name="images")
 
-app.include_router(inspection.router)
-app.include_router(status.router)
-app.include_router(robot.router)
+for api_prefix in ("/api", ""):
+    app.include_router(inspection.router, prefix=api_prefix)
+    app.include_router(status.router, prefix=api_prefix)
+    app.include_router(robot.router, prefix=api_prefix)
 
 
 @app.get("/")

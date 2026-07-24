@@ -4,7 +4,7 @@ from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile,
 
 from ..schemas import ImageSource, InspectionResult
 
-router = APIRouter(prefix="/api", tags=["inspection"])
+router = APIRouter(tags=["inspection"])
 
 ALLOWED_UPLOAD_TYPES = {"image/jpeg", "image/png", "image/webp"}
 

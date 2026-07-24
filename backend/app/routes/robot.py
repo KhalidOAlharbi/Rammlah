@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 
 from ..schemas import RobotStopResponse
 
-router = APIRouter(prefix="/api/robot", tags=["robot"])
+router = APIRouter(prefix="/robot", tags=["robot"])
 
 
 @router.post("/stop", response_model=RobotStopResponse)

@@ -29,7 +29,7 @@ def make_client(token: str = "secret-token") -> tuple[TestClient, FakeInspection
     service = FakeInspectionService()
     app.state.settings = SimpleNamespace(raspberry_pi_agent_token_value=token)
     app.state.inspection_service = service
-    app.include_router(router)
+    app.include_router(router, prefix="/api")
     return TestClient(app), service
 
 

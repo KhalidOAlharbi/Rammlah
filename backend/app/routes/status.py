@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 
 from ..schemas import StatusResponse
 
-router = APIRouter(prefix="/api", tags=["status"])
+router = APIRouter(tags=["status"])
 
 
 @router.get("/status", response_model=StatusResponse)
