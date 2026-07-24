@@ -2,7 +2,7 @@ from secrets import compare_digest
 
 from fastapi import APIRouter, File, Header, HTTPException, Request, UploadFile, status
 
-from ..schemas import ImageSource, InspectionResult
+from ..schemas import ImageSource, InspectionResult, PiCaptureCompletion, PiCaptureRequestStatus
 
 router = APIRouter(tags=["inspection"])
 
@@ -64,6 +64,44 @@ async def predict_pi_upload(
 @router.post("/scan", response_model=InspectionResult)
 async def scan(request: Request) -> InspectionResult:
     return await request.app.state.inspection_service.scan_from_camera()
+
+
+@router.post("/pi-capture/request", response_model=PiCaptureRequestStatus)
+async def request_pi_capture(request: Request) -> PiCaptureRequestStatus:
+    return request.app.state.state_service.request_pi_capture(countdown_seconds=10)
+
+
+@router.get("/pi-capture/status", response_model=PiCaptureRequestStatus)
+async def pi_capture_status(request: Request) -> PiCaptureRequestStatus:
+    return request.app.state.state_service.get_pi_capture_request()
+
+
+@router.get(
+    "/pi-agent/capture-request",
+    response_model=PiCaptureRequestStatus,
+    status_code=status.HTTP_200_OK,
+    responses={204: {"description": "No pending capture request"}},
+)
+async def pi_agent_capture_request(
+    request: Request,
+    x_rammlah_agent_token: str | None = Header(default=None),
+) -> PiCaptureRequestStatus:
+    _require_pi_agent_token(request, x_rammlah_agent_token)
+    capture_request = request.app.state.state_service.claim_pi_capture_request()
+    if capture_request is None:
+        raise HTTPException(status_code=status.HTTP_204_NO_CONTENT)
+    return capture_request
+
+
+@router.post("/pi-agent/capture-request/{request_id}/complete", response_model=PiCaptureRequestStatus)
+async def complete_pi_agent_capture_request(
+    request_id: str,
+    completion: PiCaptureCompletion,
+    request: Request,
+    x_rammlah_agent_token: str | None = Header(default=None),
+) -> PiCaptureRequestStatus:
+    _require_pi_agent_token(request, x_rammlah_agent_token)
+    return request.app.state.state_service.complete_pi_capture_request(request_id, completion)
 
 
 @router.get("/latest", response_model=InspectionResult | None)

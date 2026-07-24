@@ -1,4 +1,4 @@
-import type { InspectionResult, StatusResponse } from "./types";
+import type { InspectionResult, PiCaptureRequestStatus, StatusResponse } from "./types";
 
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
@@ -25,6 +25,16 @@ export async function uploadImage(file: File): Promise<InspectionResult> {
 export async function scanCamera(): Promise<InspectionResult> {
   const response = await fetch(`${API_BASE_URL}/api/scan`, { method: "POST" });
   return parseResponse<InspectionResult>(response);
+}
+
+export async function requestPiCapture(): Promise<PiCaptureRequestStatus> {
+  const response = await fetch(`${API_BASE_URL}/api/pi-capture/request`, { method: "POST" });
+  return parseResponse<PiCaptureRequestStatus>(response);
+}
+
+export async function getPiCaptureStatus(): Promise<PiCaptureRequestStatus> {
+  const response = await fetch(`${API_BASE_URL}/api/pi-capture/status`);
+  return parseResponse<PiCaptureRequestStatus>(response);
 }
 
 export async function getLatest(): Promise<InspectionResult | null> {

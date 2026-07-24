@@ -36,3 +36,18 @@ export interface StatusResponse {
   current_mode: ExecutionMode;
   timestamp: string;
 }
+
+export type PiCaptureRequestState = "idle" | "pending" | "capturing" | "completed" | "failed";
+
+export interface PiCaptureRequestStatus {
+  request_id: string | null;
+  state: PiCaptureRequestState;
+  countdown_seconds: number;
+  requested_at: string | null;
+  capture_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  image_url: string | null;
+  prediction: Prediction | null;
+  error: string | null;
+}

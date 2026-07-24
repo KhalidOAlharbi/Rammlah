@@ -91,3 +91,26 @@ class RobotStopResponse(BaseModel):
     robot_status: str
     message: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+PiCaptureRequestState = Literal["idle", "pending", "capturing", "completed", "failed"]
+
+
+class PiCaptureRequestStatus(BaseModel):
+    request_id: Optional[str] = None
+    state: PiCaptureRequestState = "idle"
+    countdown_seconds: int = Field(default=10, ge=1, le=60)
+    requested_at: Optional[datetime] = None
+    capture_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    image_url: Optional[str] = None
+    prediction: Optional[Prediction] = None
+    error: Optional[str] = None
+
+
+class PiCaptureCompletion(BaseModel):
+    success: bool
+    image_url: Optional[str] = None
+    prediction: Optional[Prediction] = None
+    error: Optional[str] = None

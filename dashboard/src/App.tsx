@@ -16,14 +16,18 @@ import {
 import {
   emergencyStop,
   getLatest,
+  getPiCaptureStatus,
   getStatus,
   imageUrl,
+  requestPiCapture,
   scanCamera,
   uploadImage
 } from "./api";
-import type { InspectionResult, Prediction, StatusResponse } from "./types";
+import type { InspectionResult, PiCaptureRequestStatus, Prediction, StatusResponse } from "./types";
 
 type LoadState = "idle" | "uploading" | "scanning" | "stopping" | "refreshing";
+
+const PI_CAPTURE_TIMEOUT_MS = 120_000;
 
 function formatNumber(value: number | null | undefined, suffix = "", digits = 1) {
   if (value === null || value === undefined) {
@@ -93,6 +97,17 @@ function decisionStage(result: InspectionResult | null) {
   return "Inspection";
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function secondsUntil(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+  return Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 1000));
+}
+
 function MetricCard({
   label,
   value,
@@ -141,6 +156,7 @@ export default function App() {
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [captureCountdown, setCaptureCountdown] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const resultImageUrl = useMemo(() => imageUrl(latest?.image_url), [latest?.image_url]);
@@ -199,15 +215,57 @@ export default function App() {
     setPreviewUrl(null);
     setLoadState("scanning");
     setError(null);
+    setCaptureCountdown(null);
     try {
-      const result = await scanCamera();
-      setLatest(result);
-      setStatus(await getStatus());
+      const captureRequest = await requestPiCapture();
+      await waitForPiCapture(captureRequest);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Camera scan failed.");
+      const message = caught instanceof Error ? caught.message : "Camera scan failed.";
+      if (message.includes("Not Found") || message.includes("404") || message.includes("405")) {
+        try {
+          await scanDirectCamera();
+        } catch (fallbackError) {
+          setError(fallbackError instanceof Error ? fallbackError.message : "Camera scan failed.");
+        }
+      } else {
+        setError(message);
+      }
     } finally {
+      setCaptureCountdown(null);
       setLoadState("idle");
     }
+  }
+
+  async function scanDirectCamera() {
+    const result = await scanCamera();
+    setLatest(result);
+    setStatus(await getStatus());
+  }
+
+  async function waitForPiCapture(initialRequest: PiCaptureRequestStatus) {
+    let captureRequest = initialRequest;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < PI_CAPTURE_TIMEOUT_MS) {
+      const nextCountdown = secondsUntil(captureRequest.capture_at);
+      setCaptureCountdown(nextCountdown);
+
+      if (captureRequest.state === "completed") {
+        const [latestResult, statusResult] = await Promise.all([getLatest(), getStatus()]);
+        setLatest(latestResult);
+        setStatus(statusResult);
+        return;
+      }
+
+      if (captureRequest.state === "failed") {
+        throw new Error(captureRequest.error || "Raspberry Pi camera capture failed.");
+      }
+
+      await sleep(1000);
+      captureRequest = await getPiCaptureStatus();
+    }
+
+    throw new Error("Timed out waiting for the Raspberry Pi camera capture.");
   }
 
   async function handleStop() {
@@ -257,7 +315,11 @@ export default function App() {
         </button>
         <button className="button" disabled={busy} onClick={handleScan}>
           <Camera size={18} />
-          Capture from Raspberry Pi
+          {captureCountdown !== null && captureCountdown > 0
+            ? `Capture in ${captureCountdown}s`
+            : loadState === "scanning"
+              ? "Capturing..."
+              : "Capture from Raspberry Pi"}
         </button>
         <button className="button danger" disabled={loadState === "stopping"} onClick={handleStop}>
           <Octagon size={18} />
