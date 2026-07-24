@@ -34,15 +34,21 @@ class CameraService:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         path = self.settings.captures_dir / f"pi_capture_{timestamp}.jpg"
         logger.info("Camera capture started: %s", path)
+        camera = None
         try:
             camera = Picamera2()
             camera.configure(camera.create_still_configuration(main={"format": "RGB888"}))
             camera.start()
             camera.capture_file(str(path))
-            camera.stop()
             image_bytes = path.read_bytes()
             logger.info("Camera capture saved: %s", path)
             return CameraCapture(image_bytes=image_bytes, path=path)
         except Exception as exc:
             logger.exception("Camera capture failed")
             raise CameraServiceError(f"Camera capture failed: {exc}") from exc
+        finally:
+            if camera is not None:
+                try:
+                    camera.stop()
+                finally:
+                    camera.close()

@@ -52,7 +52,10 @@ def capture_jpeg() -> bytes:
         camera.capture_file(output, format="jpeg")
         return output.getvalue()
     finally:
-        camera.stop()
+        try:
+            camera.stop()
+        finally:
+            camera.close()
 
 
 def upload_capture(api_base_url: str, token: str, image_bytes: bytes) -> dict:
