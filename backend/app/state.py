@@ -4,7 +4,7 @@ from pathlib import Path
 from threading import RLock
 from typing import Optional
 
-from .schemas import ExecutionMode, InspectionResult, StatusResponse
+from .schemas import ExecutionMode, InspectionResult, PiCaptureRequest, StatusResponse
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,9 @@ class StateService:
         self.data_dir = data_dir
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.latest_result_path = self.data_dir / "latest_result.json"
+        self.pi_capture_request_path = self.data_dir / "pi_capture_request.json"
         self._latest_result: Optional[InspectionResult] = self._load_latest_result()
+        self._pi_capture_request: Optional[PiCaptureRequest] = self._load_pi_capture_request()
         self.camera_status = "Disabled" if not camera_enabled else "Connected"
         self.openai_status = "Configured" if openai_configured else "Missing Key"
         self.weather_status = "Not Checked"
@@ -40,6 +42,15 @@ class StateService:
             logger.warning("Could not load latest result: %s", exc)
             return None
 
+    def _load_pi_capture_request(self) -> Optional[PiCaptureRequest]:
+        if not self.pi_capture_request_path.exists():
+            return None
+        try:
+            return PiCaptureRequest.model_validate_json(self.pi_capture_request_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.warning("Could not load Pi capture request: %s", exc)
+            return None
+
     def set_latest_result(self, result: InspectionResult) -> None:
         with self._lock:
             self._latest_result = result
@@ -51,6 +62,26 @@ class StateService:
     def get_latest_result(self) -> Optional[InspectionResult]:
         with self._lock:
             return self._latest_result
+
+    def set_pi_capture_request(self, capture_request: PiCaptureRequest) -> None:
+        with self._lock:
+            self._pi_capture_request = capture_request
+            self.pi_capture_request_path.write_text(
+                capture_request.model_dump_json(indent=2),
+                encoding="utf-8",
+            )
+
+    def get_pi_capture_request(self) -> Optional[PiCaptureRequest]:
+        with self._lock:
+            return self._pi_capture_request
+
+    def clear_pi_capture_request(self, request_id: str) -> bool:
+        with self._lock:
+            if self._pi_capture_request is None or self._pi_capture_request.request_id != request_id:
+                return False
+            self._pi_capture_request = None
+            self.pi_capture_request_path.unlink(missing_ok=True)
+            return True
 
     def set_camera_status(self, value: str) -> None:
         with self._lock:

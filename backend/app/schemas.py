@@ -116,3 +116,15 @@ class RobotCommandResponse(BaseModel):
     robot_status: str
     message: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PiCaptureRequest(BaseModel):
+    request_id: str
+    capture_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class PiCaptureCompleteRequest(BaseModel):
+    success: bool
+    image_url: Optional[str] = None
+    prediction: Optional[Prediction] = None
+    error: Optional[str] = None
