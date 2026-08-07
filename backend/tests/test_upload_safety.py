@@ -52,7 +52,7 @@ def test_gpio_motor_pwm_defaults_match_dri0042_wiring(tmp_path):
         captures_dir=tmp_path / "images" / "captures",
     )
 
-    assert settings.robot_drive_speed == 0.30
+    assert settings.robot_drive_speed == 0.15
     assert settings.robot_brush_speed == 1.0
     assert settings.robot_brush_lead_seconds == 2.0
 
