@@ -3,6 +3,15 @@ import type { InspectionResult, RobotCommandResponse, RobotManualAction, StatusR
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
 
 function resolveApiBaseUrl() {
+  if (typeof window === "undefined") {
+    return "http://localhost:8000";
+  }
+
+  const isLocalDevHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  if (!isLocalDevHost && window.location.hostname.endsWith("ondigitalocean.app")) {
+    return window.location.origin;
+  }
+
   if (
     configuredApiBaseUrl &&
     configuredApiBaseUrl !== "auto" &&
@@ -11,11 +20,6 @@ function resolveApiBaseUrl() {
     return configuredApiBaseUrl.replace(/\/$/, "");
   }
 
-  if (typeof window === "undefined") {
-    return "http://localhost:8000";
-  }
-
-  const isLocalDevHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
   if (!isLocalDevHost) {
     return window.location.origin;
   }
