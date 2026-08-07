@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     robot_baud_rate: int = Field(default=9600, alias="ROBOT_BAUD_RATE")
     forward_timeout_seconds: int = Field(default=60, alias="FORWARD_TIMEOUT_SECONDS")
     return_timeout_seconds: int = Field(default=60, alias="RETURN_TIMEOUT_SECONDS")
-    robot_drive_speed: float = Field(default=0.25, ge=0.0, le=1.0, alias="ROBOT_DRIVE_SPEED")
+    robot_drive_speed: float = Field(default=0.20, ge=0.0, le=1.0, alias="ROBOT_DRIVE_SPEED")
     robot_brush_speed: float = Field(default=1.0, ge=0.0, le=1.0, alias="ROBOT_BRUSH_SPEED")
     robot_pwm_frequency_hz: int = Field(default=1000, ge=1, alias="ROBOT_PWM_FREQUENCY_HZ")
     robot_brush_lead_seconds: float = Field(default=2.0, ge=0.0, le=10.0, alias="ROBOT_BRUSH_LEAD_SECONDS")
