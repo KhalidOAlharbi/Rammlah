@@ -1,7 +1,7 @@
 import type { InspectionResult, RobotCommandResponse, RobotManualAction, StatusResponse } from "./types";
 
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-const temporaryPiTunnelUrl = "https://auto-promotes-twice-lightning.trycloudflare.com";
+const temporaryPiTunnelUrl = "https://superintendent-aurora-coming-entrance.trycloudflare.com";
 
 function resolveApiBaseUrl() {
   if (typeof window === "undefined") {
