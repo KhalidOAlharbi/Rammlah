@@ -1,6 +1,7 @@
 import type { InspectionResult, RobotCommandResponse, RobotManualAction, StatusResponse } from "./types";
 
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+const temporaryPiTunnelUrl = "https://auto-promotes-twice-lightning.trycloudflare.com";
 
 function resolveApiBaseUrl() {
   if (typeof window === "undefined") {
@@ -28,6 +29,14 @@ function resolveApiBaseUrl() {
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();
+let activeApiBaseUrl = API_BASE_URL;
+
+function apiBaseUrlCandidates() {
+  if (API_BASE_URL === temporaryPiTunnelUrl) {
+    return [API_BASE_URL];
+  }
+  return [API_BASE_URL, temporaryPiTunnelUrl];
+}
 
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -37,46 +46,55 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
+  let lastError: unknown = null;
+  for (const baseUrl of apiBaseUrlCandidates()) {
+    try {
+      const response = await fetch(`${baseUrl}${path}`, init);
+      const parsed = await parseResponse<T>(response);
+      activeApiBaseUrl = baseUrl;
+      return parsed;
+    } catch (caught) {
+      lastError = caught;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Unable to reach backend.");
+}
+
 export async function uploadImage(file: File): Promise<InspectionResult> {
   const form = new FormData();
   form.append("image", file);
-  const response = await fetch(`${API_BASE_URL}/api/predict/upload`, {
+  return fetchApi<InspectionResult>("/api/predict/upload", {
     method: "POST",
     body: form
   });
-  return parseResponse<InspectionResult>(response);
 }
 
 export async function scanCamera(): Promise<InspectionResult> {
-  const response = await fetch(`${API_BASE_URL}/api/scan`, { method: "POST" });
-  return parseResponse<InspectionResult>(response);
+  return fetchApi<InspectionResult>("/api/scan", { method: "POST" });
 }
 
 export async function getLatest(): Promise<InspectionResult | null> {
-  const response = await fetch(`${API_BASE_URL}/api/latest`);
-  return parseResponse<InspectionResult | null>(response);
+  return fetchApi<InspectionResult | null>("/api/latest");
 }
 
 export async function getStatus(): Promise<StatusResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/status`);
-  return parseResponse<StatusResponse>(response);
+  return fetchApi<StatusResponse>("/api/status");
 }
 
 export async function emergencyStop(): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/robot/stop`, { method: "POST" });
-  await parseResponse(response);
+  await fetchApi<void>("/api/robot/stop", { method: "POST" });
 }
 
 export async function sendRobotCommand(
   action: RobotManualAction,
   options: { speed?: number; duration_seconds?: number | null } = {}
 ): Promise<RobotCommandResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/robot/command`, {
+  return fetchApi<RobotCommandResponse>("/api/robot/command", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action, ...options })
   });
-  return parseResponse<RobotCommandResponse>(response);
 }
 
 export function imageUrl(path: string | null | undefined): string | null {
@@ -86,5 +104,5 @@ export function imageUrl(path: string | null | undefined): string | null {
   if (path.startsWith("http")) {
     return path;
   }
-  return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+  return `${activeApiBaseUrl}${path.startsWith("/") ? path : `/${path}`}`;
 }
