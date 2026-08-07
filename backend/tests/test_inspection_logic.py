@@ -1,5 +1,3 @@
-import asyncio
-
 import pytest
 
 from app.config import Settings
@@ -84,7 +82,6 @@ def make_service(
     robot_enabled: bool = False,
     camera_enabled: bool = False,
     run_inline: bool = True,
-    schedule_follow_up: bool = False,
 ):
     settings = Settings(
         OPENAI_API_KEY="test-key",
@@ -92,7 +89,6 @@ def make_service(
         LONGITUDE=46.0,
         CAMERA_ENABLED=camera_enabled,
         ROBOT_ENABLED=robot_enabled,
-        FOLLOW_UP_SCAN_DELAY_SECONDS=0.01,
         data_dir=tmp_path / "data",
         images_dir=tmp_path / "images",
         captures_dir=tmp_path / "images" / "captures",
@@ -118,7 +114,6 @@ def make_service(
         camera_service=camera,
         robot_controller=robot,
         run_cleaning_in_background=not run_inline,
-        schedule_follow_up_scans=schedule_follow_up,
     )
     return service, state, robot, camera
 
@@ -194,7 +189,8 @@ async def test_dust_25_to_below_30_requests_another_capture(tmp_path, image_byte
     camera_result = await service.analyze_and_decide(image_bytes, ImageSource.raspberry_pi_camera)
 
     assert upload_result.robot_action == "Upload Another Image"
-    assert camera_result.robot_action == "Capture Again"
+    assert camera_result.cleaning_required is True
+    assert camera_result.robot_action == "Cleaning Approved - Robot Disabled"
     assert upload_result.fuzzy_logic_used is False
 
 
@@ -367,6 +363,45 @@ async def test_raspberry_pi_camera_can_call_robot_when_enabled(tmp_path, image_b
 
 
 @pytest.mark.asyncio
+async def test_raspberry_pi_camera_dust_runs_robot_even_when_fuzzy_postpones(tmp_path, image_bytes):
+    service, _, robot, _ = make_service(
+        tmp_path,
+        image_bytes,
+        FakeVisionService(analysis("Dust", dust=38)),
+        weather=FakeWeatherService(WeatherData(wind_speed_mps=1.0, rainfall_mm=0.0)),
+        fuzzy=FakeFuzzyService(score=30),
+        robot_enabled=True,
+        camera_enabled=True,
+    )
+
+    result = await service.analyze_and_decide(image_bytes, ImageSource.raspberry_pi_camera)
+
+    assert result.cleaning_required is True
+    assert result.robot_executed is True
+    assert "CLEAN_FORWARD" in robot.commands
+
+
+@pytest.mark.asyncio
+async def test_raspberry_pi_camera_dust_runs_robot_with_moderate_wind(tmp_path, image_bytes):
+    service, _, robot, _ = make_service(
+        tmp_path,
+        image_bytes,
+        FakeVisionService(analysis("Dust", dust=40)),
+        weather=FakeWeatherService(WeatherData(wind_speed_mps=2.5, rainfall_mm=0.0)),
+        fuzzy=FakeFuzzyService(score=30),
+        robot_enabled=True,
+        camera_enabled=True,
+    )
+
+    result = await service.analyze_and_decide(image_bytes, ImageSource.raspberry_pi_camera)
+
+    assert result.cleaning_required is True
+    assert result.robot_executed is True
+    assert result.robot_action in {"Cleaning Started", "Cleaning Completed"}
+    assert "CLEAN_FORWARD" in robot.commands
+
+
+@pytest.mark.asyncio
 async def test_crack_overrides_high_dust_coverage(tmp_path, image_bytes):
     service, _, robot, _ = make_service(
         tmp_path,
@@ -419,7 +454,7 @@ async def test_robot_timeout_triggers_stop(tmp_path, image_bytes):
 
 
 @pytest.mark.asyncio
-async def test_robot_returns_home_and_schedules_next_camera_scan(tmp_path, image_bytes):
+async def test_robot_returns_home_without_scheduling_next_camera_scan(tmp_path, image_bytes):
     service, state, robot, camera = make_service(
         tmp_path,
         image_bytes,
@@ -428,12 +463,10 @@ async def test_robot_returns_home_and_schedules_next_camera_scan(tmp_path, image
         fuzzy=FakeFuzzyService(score=90),
         robot_enabled=True,
         camera_enabled=True,
-        schedule_follow_up=True,
     )
 
     await service.analyze_and_decide(image_bytes, ImageSource.raspberry_pi_camera)
-    await asyncio.sleep(0.05)
 
     assert "RETURN_HOME" in robot.commands
-    assert state.follow_up_scan_scheduled is True
-    assert camera.calls >= 1
+    assert state.robot_status == "Home"
+    assert camera.calls == 0

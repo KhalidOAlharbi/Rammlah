@@ -15,6 +15,17 @@ class ExecutionMode(str, Enum):
     prototype = "Prototype"
 
 
+class RobotManualAction(str, Enum):
+    forward = "forward"
+    reverse = "reverse"
+    left = "left"
+    right = "right"
+    brush_on = "brush_on"
+    brush_off = "brush_off"
+    return_home = "return_home"
+    stop = "stop"
+
+
 Prediction = Literal["Clean", "Dust", "Crack"]
 
 
@@ -93,24 +104,15 @@ class RobotStopResponse(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-PiCaptureRequestState = Literal["idle", "pending", "capturing", "completed", "failed"]
+class RobotCommandRequest(BaseModel):
+    action: RobotManualAction
+    speed: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    duration_seconds: Optional[float] = Field(default=1.0, ge=0.0, le=10.0)
 
 
-class PiCaptureRequestStatus(BaseModel):
-    request_id: Optional[str] = None
-    state: PiCaptureRequestState = "idle"
-    countdown_seconds: int = Field(default=10, ge=1, le=60)
-    requested_at: Optional[datetime] = None
-    capture_at: Optional[datetime] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    image_url: Optional[str] = None
-    prediction: Optional[Prediction] = None
-    error: Optional[str] = None
-
-
-class PiCaptureCompletion(BaseModel):
+class RobotCommandResponse(BaseModel):
     success: bool
-    image_url: Optional[str] = None
-    prediction: Optional[Prediction] = None
-    error: Optional[str] = None
+    action: RobotManualAction
+    robot_status: str
+    message: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -21,6 +21,7 @@ LATITUDE=24.7136
 LONGITUDE=46.6753
 CAMERA_ENABLED=false
 ROBOT_ENABLED=false
+ROBOT_CONTROLLER=serial
 ```
 
 Start the API:
@@ -45,8 +46,27 @@ API docs remain available at `http://localhost:8000/docs`.
 10. Test a Pi scan with `POST http://raspberrypi.local:8000/api/scan`.
 11. Find the Pi IP with `hostname -I`.
 12. Set dashboard `VITE_API_BASE_URL=http://raspberrypi.local:8000` or `http://<pi-ip>:8000`.
-13. Enable `ROBOT_ENABLED=true` only after upload, camera, weather, fuzzy logic, emergency stop, and serial wiring tests succeed.
-14. To start at boot, copy `systemd/rammlah-backend.service` to `/etc/systemd/system/`, edit paths if needed, then run:
+13. For direct Raspberry Pi GPIO control with three DRI0042 drivers, wire the bench according to `../docs/raspberry-pi-dri0042-wiring.md`, then set:
+
+```bash
+ROBOT_ENABLED=true
+ROBOT_CONTROLLER=gpio
+ROBOT_DRIVE_SPEED=0.20
+ROBOT_BRUSH_SPEED=1.00
+ROBOT_BRUSH_LEAD_SECONDS=2.0
+FORWARD_TIMEOUT_SECONDS=5
+RETURN_TIMEOUT_SECONDS=5
+```
+
+14. Keep the dashboard pointed at the same backend host:
+
+```bash
+VITE_API_BASE_URL=http://localhost:8000
+```
+
+Use `http://raspberrypi.local:8000` or `http://<pi-ip>:8000` only when the dashboard runs on another computer.
+15. Enable motor power only after upload, camera, weather, fuzzy logic, emergency stop, and GPIO wiring tests succeed.
+16. To start at boot, copy `systemd/rammlah-backend.service` to `/etc/systemd/system/`, edit paths if needed, then run:
 
 ```bash
 sudo systemctl daemon-reload

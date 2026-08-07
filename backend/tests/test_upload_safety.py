@@ -2,7 +2,7 @@ import pytest
 
 from app.config import Settings
 from app.schemas import ImageSource, VisionAnalysis, WeatherData
-from app.services.robot_service import MockRobotController
+from app.services.robot_service import GPIORobotController, MockRobotController
 from test_inspection_logic import FakeFuzzyService, FakeVisionService, FakeWeatherService, make_service
 
 
@@ -42,6 +42,31 @@ def test_missing_openai_key_causes_clear_startup_configuration_error(tmp_path):
 
     with pytest.raises(RuntimeError, match="OPENAI_API_KEY is missing"):
         settings.validate_for_startup()
+
+
+def test_gpio_motor_pwm_defaults_match_dri0042_wiring(tmp_path):
+    settings = Settings(
+        OPENAI_API_KEY="test-key",
+        data_dir=tmp_path / "data",
+        images_dir=tmp_path / "images",
+        captures_dir=tmp_path / "images" / "captures",
+    )
+
+    assert settings.robot_drive_speed == 0.20
+    assert settings.robot_brush_speed == 1.0
+    assert settings.robot_brush_lead_seconds == 2.0
+
+
+def test_gpio_motor_pin_map_matches_raspberry_pi_5_dri0042_wiring():
+    assert GPIORobotController.LEFT_MOTOR.in1 == 17
+    assert GPIORobotController.LEFT_MOTOR.in2 == 27
+    assert GPIORobotController.LEFT_MOTOR.pwm == 18
+    assert GPIORobotController.RIGHT_MOTOR.in1 == 22
+    assert GPIORobotController.RIGHT_MOTOR.in2 == 23
+    assert GPIORobotController.RIGHT_MOTOR.pwm == 12
+    assert GPIORobotController.BRUSH_MOTOR.in1 == 5
+    assert GPIORobotController.BRUSH_MOTOR.in2 == 6
+    assert GPIORobotController.BRUSH_MOTOR.pwm == 13
 
 
 def test_mock_robot_records_timeout_and_stop():

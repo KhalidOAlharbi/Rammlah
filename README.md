@@ -43,3 +43,12 @@ VITE_API_BASE_URL=http://raspberrypi.local:8000
 ```
 
 or use the Pi local IP address.
+
+For the direct Raspberry Pi 5 + three DRI0042 motor-driver setup, use `docs/raspberry-pi-dri0042-wiring.md` and set the backend `.env` to:
+
+```bash
+ROBOT_ENABLED=true
+ROBOT_CONTROLLER=gpio
+```
+
+When the dashboard is running on the same Raspberry Pi as the backend, keep `VITE_API_BASE_URL=http://localhost:8000`.

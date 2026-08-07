@@ -31,7 +31,6 @@ class InspectionService:
         robot_controller: RobotController,
         *,
         run_cleaning_in_background: bool = True,
-        schedule_follow_up_scans: bool = True,
     ):
         self.settings = settings
         self.state = state
@@ -41,8 +40,8 @@ class InspectionService:
         self.camera_service = camera_service
         self.robot = robot_controller
         self.run_cleaning_in_background = run_cleaning_in_background
-        self.schedule_follow_up_scans = schedule_follow_up_scans
         self._cleaning_lock = asyncio.Lock()
+        self._camera_scan_lock = asyncio.Lock()
 
     async def analyze_and_decide(
         self,
@@ -123,29 +122,30 @@ class InspectionService:
         return result
 
     async def scan_from_camera(self) -> InspectionResult:
-        try:
-            capture = await asyncio.to_thread(self.camera_service.capture_jpeg)
-            self.state.set_camera_status("Connected")
-        except CameraServiceError as exc:
-            self.state.set_camera_status("Error")
-            result = self._base_result(
-                ImageSource.raspberry_pi_camera,
-                ExecutionMode.prototype,
-                success=False,
-                image_url=None,
-            )
-            result.error = str(exc)
-            result.reason = str(exc)
-            result.robot_action = "No Action"
-            result.robot_status = self.state.robot_status
-            self.state.set_latest_result(result)
-            return result
+        async with self._camera_scan_lock:
+            try:
+                capture = await asyncio.to_thread(self.camera_service.capture_jpeg)
+                self.state.set_camera_status("Connected")
+            except CameraServiceError as exc:
+                self.state.set_camera_status("Error")
+                result = self._base_result(
+                    ImageSource.raspberry_pi_camera,
+                    ExecutionMode.prototype,
+                    success=False,
+                    image_url=None,
+                )
+                result.error = str(exc)
+                result.reason = str(exc)
+                result.robot_action = "No Action"
+                result.robot_status = self.state.robot_status
+                self.state.set_latest_result(result)
+                return result
 
-        return await self.analyze_and_decide(
-            capture.image_bytes,
-            ImageSource.raspberry_pi_camera,
-            image_path=capture.path,
-        )
+            return await self.analyze_and_decide(
+                capture.image_bytes,
+                ImageSource.raspberry_pi_camera,
+                image_path=capture.path,
+            )
 
     async def emergency_stop(self) -> None:
         logger.warning("Emergency stop requested")
@@ -201,20 +201,12 @@ class InspectionService:
             result.reason = "Dust coverage is below 25 percent. Panel is treated as clean."
             return
 
-        if 25 <= dust < 30:
+        if 25 <= dust < 30 and result.image_source == ImageSource.dashboard_upload:
             result.cleaning_required = False
-            result.robot_action = (
-                "Capture Again"
-                if result.image_source == ImageSource.raspberry_pi_camera
-                else "Upload Another Image"
-            )
+            result.robot_action = "Upload Another Image"
             result.robot_status = "Idle"
             result.fuzzy_logic_used = False
-            result.reason = (
-                "Dust coverage is uncertain. Capture another image."
-                if result.image_source == ImageSource.raspberry_pi_camera
-                else "Dust coverage is uncertain. Upload another image."
-            )
+            result.reason = "Dust coverage is uncertain. Upload another image."
             return
 
         try:
@@ -231,48 +223,57 @@ class InspectionService:
             result.weather_error = str(exc)
             return
 
-        if weather.wind_speed_mps > 4:
-            result.cleaning_required = False
-            result.robot_action = "Postpone Cleaning"
-            result.robot_status = "Idle"
-            result.reason = "Safety First - high wind."
-            return
+        if result.image_source == ImageSource.dashboard_upload:
+            if weather.wind_speed_mps > 4:
+                result.cleaning_required = False
+                result.robot_action = "Postpone Cleaning"
+                result.robot_status = "Idle"
+                result.reason = "Safety First - high wind."
+                return
 
-        if 2 <= weather.wind_speed_mps <= 4:
-            result.cleaning_required = False
-            result.robot_action = "Postpone Cleaning"
-            result.robot_status = "Idle"
-            result.reason = "Wind may provide partial natural self-cleaning."
-            return
+            if 2 <= weather.wind_speed_mps <= 4:
+                result.cleaning_required = False
+                result.robot_action = "Postpone Cleaning"
+                result.robot_status = "Idle"
+                result.reason = "Wind may provide partial natural self-cleaning."
+                return
 
-        if weather.rainfall_mm > 5:
-            result.cleaning_required = False
-            result.robot_action = "Postpone Cleaning"
-            result.robot_status = "Idle"
-            result.reason = "Natural rainfall is sufficient."
-            return
+            if weather.rainfall_mm > 5:
+                result.cleaning_required = False
+                result.robot_action = "Postpone Cleaning"
+                result.robot_status = "Idle"
+                result.reason = "Natural rainfall is sufficient."
+                return
 
-        if 0.3 <= weather.rainfall_mm <= 5:
-            result.cleaning_required = False
-            result.robot_action = "Postpone Cleaning"
-            result.robot_status = "Idle"
-            result.reason = "Partial natural cleaning is expected."
-            return
+            if 0.3 <= weather.rainfall_mm <= 5:
+                result.cleaning_required = False
+                result.robot_action = "Postpone Cleaning"
+                result.robot_status = "Idle"
+                result.reason = "Partial natural cleaning is expected."
+                return
 
-        try:
-            fuzzy = self.fuzzy_service.calculate(dust, weather.wind_speed_mps, weather.rainfall_mm)
-            result.fuzzy_logic_used = True
-            result.fuzzy_score = fuzzy.score
-            result.fuzzy_decision = fuzzy.decision
-            result.cleaning_required = fuzzy.decision == "Clean"
-        except FuzzyLogicError as exc:
-            await self._stop_robot_if_moving()
-            result.cleaning_required = False
-            result.robot_action = "Postpone Cleaning"
-            result.robot_status = self.state.robot_status
-            result.reason = "Fuzzy calculation failed. Robot movement blocked."
-            result.error = str(exc)
-            return
+        if 25 <= dust < 30:
+            result.fuzzy_logic_used = False
+            result.cleaning_required = True
+        else:
+            try:
+                fuzzy = self.fuzzy_service.calculate(dust, weather.wind_speed_mps, weather.rainfall_mm)
+                result.fuzzy_logic_used = True
+                result.fuzzy_score = fuzzy.score
+                result.fuzzy_decision = fuzzy.decision
+                result.cleaning_required = (
+                    True
+                    if result.image_source == ImageSource.raspberry_pi_camera
+                    else fuzzy.decision == "Clean"
+                )
+            except FuzzyLogicError as exc:
+                await self._stop_robot_if_moving()
+                result.cleaning_required = False
+                result.robot_action = "Postpone Cleaning"
+                result.robot_status = self.state.robot_status
+                result.reason = "Fuzzy calculation failed. Robot movement blocked."
+                result.error = str(exc)
+                return
 
         if result.cleaning_required:
             if result.image_source == ImageSource.dashboard_upload:
@@ -283,7 +284,10 @@ class InspectionService:
             else:
                 result.robot_action = "Cleaning Approved"
                 result.robot_status = "Idle"
-                result.reason = "Dust detected and weather conditions allow cleaning."
+                if result.fuzzy_logic_used and result.fuzzy_decision == "Postpone":
+                    result.reason = "Dust detected and weather conditions allow cleaning. Prototype cleaning is enabled."
+                else:
+                    result.reason = "Dust detected and weather conditions allow cleaning."
         else:
             result.robot_action = "Postpone Cleaning"
             result.robot_status = "Idle"
@@ -338,9 +342,6 @@ class InspectionService:
                 await asyncio.to_thread(self.robot.stop)
                 self.state.set_robot_status("Home")
                 logger.info("Cleaning sequence complete: home")
-                if self.schedule_follow_up_scans and self.settings.camera_enabled:
-                    self.state.mark_follow_up_scan_scheduled()
-                    asyncio.create_task(self._delayed_follow_up_scan())
             except Exception as exc:
                 logger.exception("Cleaning sequence failed")
                 try:
@@ -358,13 +359,6 @@ class InspectionService:
                     self.state.set_latest_result(latest)
             finally:
                 self.state.set_cleaning_active(False)
-
-    async def _delayed_follow_up_scan(self) -> None:
-        await asyncio.sleep(self.settings.follow_up_scan_delay_seconds)
-        try:
-            await self.scan_from_camera()
-        except Exception:
-            logger.exception("Follow-up camera scan failed")
 
     async def _stop_robot_if_moving(self) -> None:
         if self.state.cleaning_active or self.robot.is_ready():

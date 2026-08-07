@@ -1,6 +1,15 @@
 export type Prediction = "Clean" | "Dust" | "Crack";
 export type ImageSource = "dashboard_upload" | "raspberry_pi_camera";
 export type ExecutionMode = "Test" | "Prototype";
+export type RobotManualAction =
+  | "forward"
+  | "reverse"
+  | "left"
+  | "right"
+  | "brush_on"
+  | "brush_off"
+  | "return_home"
+  | "stop";
 
 export interface InspectionResult {
   success: boolean;
@@ -37,17 +46,10 @@ export interface StatusResponse {
   timestamp: string;
 }
 
-export type PiCaptureRequestState = "idle" | "pending" | "capturing" | "completed" | "failed";
-
-export interface PiCaptureRequestStatus {
-  request_id: string | null;
-  state: PiCaptureRequestState;
-  countdown_seconds: number;
-  requested_at: string | null;
-  capture_at: string | null;
-  started_at: string | null;
-  completed_at: string | null;
-  image_url: string | null;
-  prediction: Prediction | null;
-  error: string | null;
+export interface RobotCommandResponse {
+  success: boolean;
+  action: RobotManualAction;
+  robot_status: string;
+  message: string;
+  timestamp: string;
 }

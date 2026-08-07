@@ -17,3 +17,5 @@ pytest-asyncio>=1.1.0
 
 # Install Picamera2 on Raspberry Pi OS with apt:
 # sudo apt install -y python3-picamera2
+# Install Raspberry Pi 5 GPIO support with apt:
+# sudo apt install -y python3-gpiozero python3-lgpio

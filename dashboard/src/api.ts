@@ -1,8 +1,24 @@
-import type { InspectionResult, PiCaptureRequestStatus, StatusResponse } from "./types";
+import type { InspectionResult, RobotCommandResponse, RobotManualAction, StatusResponse } from "./types";
 
-const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
 
-export const API_BASE_URL = configuredApiBaseUrl ? configuredApiBaseUrl.replace(/\/$/, "") : "";
+function resolveApiBaseUrl() {
+  if (
+    configuredApiBaseUrl &&
+    configuredApiBaseUrl !== "auto" &&
+    !configuredApiBaseUrl.includes("<RASPBERRY_PI_IP>")
+  ) {
+    return configuredApiBaseUrl.replace(/\/$/, "");
+  }
+
+  if (typeof window === "undefined") {
+    return "http://localhost:8000";
+  }
+
+  return `${window.location.protocol}//${window.location.hostname}:8000`;
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -27,16 +43,6 @@ export async function scanCamera(): Promise<InspectionResult> {
   return parseResponse<InspectionResult>(response);
 }
 
-export async function requestPiCapture(): Promise<PiCaptureRequestStatus> {
-  const response = await fetch(`${API_BASE_URL}/api/pi-capture/request`, { method: "POST" });
-  return parseResponse<PiCaptureRequestStatus>(response);
-}
-
-export async function getPiCaptureStatus(): Promise<PiCaptureRequestStatus> {
-  const response = await fetch(`${API_BASE_URL}/api/pi-capture/status`);
-  return parseResponse<PiCaptureRequestStatus>(response);
-}
-
 export async function getLatest(): Promise<InspectionResult | null> {
   const response = await fetch(`${API_BASE_URL}/api/latest`);
   return parseResponse<InspectionResult | null>(response);
@@ -50,6 +56,18 @@ export async function getStatus(): Promise<StatusResponse> {
 export async function emergencyStop(): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/api/robot/stop`, { method: "POST" });
   await parseResponse(response);
+}
+
+export async function sendRobotCommand(
+  action: RobotManualAction,
+  options: { speed?: number; duration_seconds?: number | null } = {}
+): Promise<RobotCommandResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/robot/command`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, ...options })
+  });
+  return parseResponse<RobotCommandResponse>(response);
 }
 
 export function imageUrl(path: string | null | undefined): string | null {

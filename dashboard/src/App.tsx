@@ -1,14 +1,20 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   Bot,
+  Brush,
   Camera,
   CheckCircle2,
   CloudRain,
   Gauge,
   Octagon,
   RefreshCw,
+  RotateCcw,
+  RotateCw,
   ShieldAlert,
+  Square,
   UploadCloud,
   Wind,
   Wifi
@@ -16,18 +22,15 @@ import {
 import {
   emergencyStop,
   getLatest,
-  getPiCaptureStatus,
   getStatus,
   imageUrl,
-  requestPiCapture,
   scanCamera,
+  sendRobotCommand,
   uploadImage
 } from "./api";
-import type { InspectionResult, PiCaptureRequestStatus, Prediction, StatusResponse } from "./types";
+import type { InspectionResult, Prediction, RobotManualAction, StatusResponse } from "./types";
 
-type LoadState = "idle" | "uploading" | "scanning" | "stopping" | "refreshing";
-
-const PI_CAPTURE_TIMEOUT_MS = 120_000;
+type LoadState = "idle" | "uploading" | "scanning" | "stopping" | "commanding" | "refreshing";
 
 function formatNumber(value: number | null | undefined, suffix = "", digits = 1) {
   if (value === null || value === undefined) {
@@ -46,20 +49,61 @@ function formatTime(value: string | null | undefined) {
   }).format(new Date(value));
 }
 
-function predictionClass(prediction: Prediction | null | undefined, success = true) {
-  if (!success) {
+type PanelCondition = Prediction | "No Scan" | "Error";
+
+function panelCondition(result: InspectionResult | null): PanelCondition {
+  if (!result) {
+    return "No Scan";
+  }
+  if (!result.success) {
+    return "Error";
+  }
+  if (result.maintenance_alert || result.prediction === "Crack") {
+    return "Crack";
+  }
+  if (result.prediction === "Clean") {
+    return "Clean";
+  }
+  if (result.prediction === "Dust") {
+    if (result.dust_coverage_percent !== null && result.dust_coverage_percent < 25) {
+      return "Clean";
+    }
+    return "Dust";
+  }
+  return "No Scan";
+}
+
+function conditionClass(condition: PanelCondition) {
+  if (condition === "Error" || condition === "Crack") {
     return "danger";
   }
-  if (prediction === "Clean") {
+  if (condition === "Clean") {
     return "success";
   }
-  if (prediction === "Dust") {
+  if (condition === "Dust") {
     return "warning";
   }
-  if (prediction === "Crack") {
-    return "danger";
-  }
   return "neutral";
+}
+
+function conditionLabel(condition: PanelCondition) {
+  return condition;
+}
+
+function conditionMessage(result: InspectionResult | null, condition: PanelCondition) {
+  if (condition === "No Scan") {
+    return "Waiting for Capture.";
+  }
+  if (condition === "Error") {
+    return "Inspection failed. Check backend result.";
+  }
+  if (condition === "Clean") {
+    return "Clean panel. No cleaning needed.";
+  }
+  if (condition === "Crack") {
+    return "Crack detected. Maintenance needed.";
+  }
+  return result?.cleaning_required ? "Dust detected. Cleaning will run." : "Dust detected. Cleaning is postponed.";
 }
 
 function sourceLabel(source: InspectionResult["image_source"] | null | undefined) {
@@ -95,17 +139,6 @@ function decisionStage(result: InspectionResult | null) {
     return "Dust Threshold";
   }
   return "Inspection";
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-function secondsUntil(value: string | null | undefined) {
-  if (!value) {
-    return null;
-  }
-  return Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 1000));
 }
 
 function MetricCard({
@@ -156,12 +189,12 @@ export default function App() {
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [captureCountdown, setCaptureCountdown] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const resultImageUrl = useMemo(() => imageUrl(latest?.image_url), [latest?.image_url]);
   const visibleImage = previewUrl || resultImageUrl;
-  const tone = predictionClass(latest?.prediction, latest?.success ?? true);
+  const condition = panelCondition(latest);
+  const tone = conditionClass(condition);
 
   async function refreshAll(nextState: LoadState = "refreshing") {
     setLoadState(nextState);
@@ -215,57 +248,15 @@ export default function App() {
     setPreviewUrl(null);
     setLoadState("scanning");
     setError(null);
-    setCaptureCountdown(null);
     try {
-      const captureRequest = await requestPiCapture();
-      await waitForPiCapture(captureRequest);
+      const result = await scanCamera();
+      setLatest(result);
+      setStatus(await getStatus());
     } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Camera scan failed.";
-      if (message.includes("Not Found") || message.includes("404") || message.includes("405")) {
-        try {
-          await scanDirectCamera();
-        } catch (fallbackError) {
-          setError(fallbackError instanceof Error ? fallbackError.message : "Camera scan failed.");
-        }
-      } else {
-        setError(message);
-      }
+      setError(caught instanceof Error ? caught.message : "Camera scan failed.");
     } finally {
-      setCaptureCountdown(null);
       setLoadState("idle");
     }
-  }
-
-  async function scanDirectCamera() {
-    const result = await scanCamera();
-    setLatest(result);
-    setStatus(await getStatus());
-  }
-
-  async function waitForPiCapture(initialRequest: PiCaptureRequestStatus) {
-    let captureRequest = initialRequest;
-    const startedAt = Date.now();
-
-    while (Date.now() - startedAt < PI_CAPTURE_TIMEOUT_MS) {
-      const nextCountdown = secondsUntil(captureRequest.capture_at);
-      setCaptureCountdown(nextCountdown);
-
-      if (captureRequest.state === "completed") {
-        const [latestResult, statusResult] = await Promise.all([getLatest(), getStatus()]);
-        setLatest(latestResult);
-        setStatus(statusResult);
-        return;
-      }
-
-      if (captureRequest.state === "failed") {
-        throw new Error(captureRequest.error || "Raspberry Pi camera capture failed.");
-      }
-
-      await sleep(1000);
-      captureRequest = await getPiCaptureStatus();
-    }
-
-    throw new Error("Timed out waiting for the Raspberry Pi camera capture.");
   }
 
   async function handleStop() {
@@ -281,7 +272,21 @@ export default function App() {
     }
   }
 
+  async function handleRobotCommand(action: RobotManualAction, duration_seconds: number | null = 1) {
+    setLoadState(action === "stop" ? "stopping" : "commanding");
+    setError(null);
+    try {
+      await sendRobotCommand(action, { duration_seconds });
+      setStatus(await getStatus());
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Robot command failed.");
+    } finally {
+      setLoadState("idle");
+    }
+  }
+
   const busy = loadState !== "idle";
+  const robotControlDisabled = busy || !status?.robot_enabled;
 
   return (
     <main className="app-shell">
@@ -315,11 +320,7 @@ export default function App() {
         </button>
         <button className="button" disabled={busy} onClick={handleScan}>
           <Camera size={18} />
-          {captureCountdown !== null && captureCountdown > 0
-            ? `Capture in ${captureCountdown}s`
-            : loadState === "scanning"
-              ? "Capturing..."
-              : "Capture from Raspberry Pi"}
+          Capture from Raspberry Pi
         </button>
         <button className="button danger" disabled={loadState === "stopping"} onClick={handleStop}>
           <Octagon size={18} />
@@ -327,6 +328,65 @@ export default function App() {
         </button>
         <button className="icon-button" disabled={busy} onClick={() => refreshAll()} title="Refresh status">
           <RefreshCw size={19} className={loadState === "refreshing" ? "spin" : ""} />
+        </button>
+      </section>
+
+      <section className="manual-band" aria-label="Manual robot controls">
+        <button
+          className="icon-button manual"
+          disabled={robotControlDisabled}
+          onClick={() => handleRobotCommand("left")}
+          title="Turn left"
+        >
+          <RotateCcw size={19} />
+        </button>
+        <button
+          className="icon-button manual"
+          disabled={robotControlDisabled}
+          onClick={() => handleRobotCommand("forward")}
+          title="Move forward"
+        >
+          <ArrowUp size={19} />
+        </button>
+        <button
+          className="icon-button manual"
+          disabled={robotControlDisabled}
+          onClick={() => handleRobotCommand("right")}
+          title="Turn right"
+        >
+          <RotateCw size={19} />
+        </button>
+        <button
+          className="icon-button manual"
+          disabled={robotControlDisabled}
+          onClick={() => handleRobotCommand("reverse")}
+          title="Move reverse"
+        >
+          <ArrowDown size={19} />
+        </button>
+        <button
+          className="icon-button manual"
+          disabled={robotControlDisabled}
+          onClick={() => handleRobotCommand("return_home", 2)}
+          title="Return home"
+        >
+          <Bot size={19} />
+        </button>
+        <button
+          className="icon-button manual"
+          disabled={robotControlDisabled}
+          onClick={() => handleRobotCommand("brush_on", 2)}
+          title="Brush pulse"
+        >
+          <Brush size={19} />
+        </button>
+        <button
+          className="icon-button manual stop"
+          disabled={busy || !status?.robot_enabled}
+          onClick={() => handleRobotCommand("stop", null)}
+          title="Stop motors"
+        >
+          <Square size={18} />
         </button>
       </section>
 
@@ -340,8 +400,8 @@ export default function App() {
       <section className="dashboard-grid">
         <div className="panel-view">
           <div className={`condition-ribbon ${tone}`}>
-            <span>Current Panel Condition</span>
-            <strong>{latest?.prediction || "No Scan"}</strong>
+            <span>Panel Result</span>
+            <strong>{conditionLabel(condition)}</strong>
           </div>
           <div className="image-frame">
             {visibleImage ? (
@@ -360,6 +420,26 @@ export default function App() {
         </div>
 
         <div className="metrics-grid">
+          <MetricCard
+            label="Panel Result"
+            value={conditionLabel(condition)}
+            tone={tone}
+            icon={
+              condition === "Clean" ? (
+                <CheckCircle2 size={20} />
+              ) : condition === "Crack" || condition === "Error" ? (
+                <ShieldAlert size={20} />
+              ) : (
+                <AlertTriangle size={20} />
+              )
+            }
+          />
+          <MetricCard
+            label="Result Meaning"
+            value={conditionMessage(latest, condition)}
+            tone={tone}
+            icon={<ShieldAlert size={20} />}
+          />
           <MetricCard
             label="AI Confidence"
             value={formatNumber(

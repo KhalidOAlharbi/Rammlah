@@ -65,6 +65,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        camera_service.close()
         robot_controller.close()
         logger.info("Rammlah backend stopped")
 
@@ -78,6 +79,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
+    allow_origin_regex=settings.allowed_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

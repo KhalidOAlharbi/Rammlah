@@ -2,7 +2,7 @@
 set -euo pipefail
 
 sudo apt update
-sudo apt install -y python3-venv python3-pip python3-picamera2 libopenblas-dev
+sudo apt install -y python3-venv python3-pip python3-picamera2 python3-gpiozero python3-lgpio libopenblas-dev
 
 cd "$(dirname "$0")"
 python3 -m venv .venv --system-site-packages
