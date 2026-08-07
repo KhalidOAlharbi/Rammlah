@@ -9,10 +9,6 @@ function resolveApiBaseUrl() {
   }
 
   const isLocalDevHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-  if (!isLocalDevHost && window.location.hostname.endsWith("ondigitalocean.app")) {
-    return window.location.origin;
-  }
-
   if (
     configuredApiBaseUrl &&
     configuredApiBaseUrl !== "auto" &&
@@ -32,6 +28,9 @@ export const API_BASE_URL = resolveApiBaseUrl();
 let activeApiBaseUrl = API_BASE_URL;
 
 function apiBaseUrlCandidates() {
+  if (typeof window !== "undefined" && window.location.hostname.endsWith("ondigitalocean.app")) {
+    return [temporaryPiTunnelUrl, API_BASE_URL, window.location.origin];
+  }
   if (API_BASE_URL === temporaryPiTunnelUrl) {
     return [API_BASE_URL];
   }
