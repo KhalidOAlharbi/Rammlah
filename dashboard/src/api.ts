@@ -15,6 +15,11 @@ function resolveApiBaseUrl() {
     return "http://localhost:8000";
   }
 
+  const isLocalDevHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  if (!isLocalDevHost) {
+    return window.location.origin;
+  }
+
   return `${window.location.protocol}//${window.location.hostname}:8000`;
 }
 
